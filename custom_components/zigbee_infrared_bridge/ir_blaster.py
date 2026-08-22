@@ -11,7 +11,7 @@ attribute. That coupling is confined to this module.
 import asyncio
 import logging
 
-from zigpy.types import EUI64
+from zigpy.types import EUI64, CharacterString
 from zigpy.zcl import Cluster
 
 from homeassistant.components.zha.helpers import (  # pylint: disable=home-assistant-component-root-import
@@ -25,7 +25,7 @@ from .const import (
     IR_CONTROL_CLUSTER_ID,
     IR_LEARN_COMMAND_ID,
     IR_SEND_COMMAND_ID,
-    LEARN_POLL_INTERVAL,
+    LEARN_POLL_INTERVAL, ATTR_LAST_LEARNED_IR_ID,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -61,7 +61,8 @@ class ZigbeeIrBlaster:
         success, _ = await cluster.read_attributes(
             [ATTR_LAST_LEARNED_IR_CODE], allow_cache=False
         )
-        return success.get(ATTR_LAST_LEARNED_IR_CODE, "")
+        result = success.get(ATTR_LAST_LEARNED_IR_ID, "")
+        return CharacterString(result)
 
     async def async_learn_code(self, timeout: float) -> str:
         """Put the blaster into learn mode and wait for a new code.
@@ -72,7 +73,7 @@ class ZigbeeIrBlaster:
         """
         async with self._learn_lock:
             cluster = self._get_ir_control_cluster()
-            cluster.command(IR_LEARN_COMMAND_ID, on_off=True)
+            await cluster.command(IR_LEARN_COMMAND_ID, on_off=True)
             baseline = await self._async_read_last_learned_code(cluster)
 
             try:
@@ -87,9 +88,9 @@ class ZigbeeIrBlaster:
                     "Timed out waiting for an IR code to be learned"
                 ) from err
             finally:
-                cluster.command(IR_LEARN_COMMAND_ID, on_off=False)
+                await cluster.command(IR_LEARN_COMMAND_ID, on_off=False)
 
     async def async_send_code(self, code: str) -> None:
         """Send a previously learned IR code."""
         cluster = self._get_ir_control_cluster()
-        cluster.command(IR_SEND_COMMAND_ID, code=code)
+        await cluster.command(IR_SEND_COMMAND_ID, code=code)
