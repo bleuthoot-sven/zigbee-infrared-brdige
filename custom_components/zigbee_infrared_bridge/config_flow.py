@@ -1,5 +1,6 @@
 """Config flow for the Zigbee Infrared Bridge integration."""
 
+import asyncio
 from typing import Any, override
 
 import voluptuous as vol
@@ -11,9 +12,15 @@ from homeassistant.components.zha.const import (  # pylint: disable=home-assista
 from homeassistant.components.zha.helpers import (  # pylint: disable=home-assistant-component-root-import
     get_zha_gateway,
 )
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
-from homeassistant.const import CONF_DEVICE_ID
-from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    ConfigSubentryFlow,
+    SubentryFlowResult,
+)
+from homeassistant.const import CONF_CODE, CONF_DEVICE_ID, CONF_NAME
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.selector import (
@@ -22,7 +29,13 @@ from homeassistant.helpers.selector import (
     DeviceSelectorConfig,
 )
 
-from .const import CONF_IEEE, DOMAIN, IR_CONTROL_CLUSTER_ID
+from .const import (
+    CONF_IEEE,
+    DOMAIN,
+    IR_CONTROL_CLUSTER_ID,
+    LEARN_TIMEOUT,
+    SUBENTRY_TYPE_COMMAND,
+)
 
 
 class NotAnIrBlaster(HomeAssistantError):
@@ -98,4 +111,99 @@ class ZigbeeInfraredBridgeConfigFlow(ConfigFlow, domain=DOMAIN):
                 }
             ),
             errors=errors,
+        )
+
+    @classmethod
+    @callback
+    @override
+    def async_get_supported_subentry_types(
+        cls, config_entry: ConfigEntry
+    ) -> dict[str, type[ConfigSubentryFlow]]:
+        """Return subentries supported by this handler."""
+        return {SUBENTRY_TYPE_COMMAND: CommandSubentryFlowHandler}
+
+
+class CommandSubentryFlowHandler(ConfigSubentryFlow):
+    """Handle learning and naming an IR command."""
+
+    learn_task: asyncio.Task[str] | None = None
+    _learned_code: str
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Learn a new IR command."""
+        return await self._async_step_learn(step_id="user", next_step_id="name")
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Re-learn an existing IR command."""
+        return await self._async_step_learn(
+            step_id="reconfigure", next_step_id="reconfigure_name"
+        )
+
+    async def _async_step_learn(
+        self, step_id: str, next_step_id: str
+    ) -> SubentryFlowResult:
+        """Put the blaster into learn mode and wait for a code to be captured."""
+        blaster = self._get_entry().runtime_data
+
+        if self.learn_task is None:
+            self.learn_task = self.hass.async_create_task(
+                blaster.async_learn_code(LEARN_TIMEOUT)
+            )
+
+        if not self.learn_task.done():
+            return self.async_show_progress(
+                step_id=step_id,
+                progress_action="learn",
+                progress_task=self.learn_task,
+            )
+
+        try:
+            self._learned_code = self.learn_task.result()
+        except HomeAssistantError:
+            return self.async_show_progress_done(next_step_id="timed_out")
+
+        return self.async_show_progress_done(next_step_id=next_step_id)
+
+    async def async_step_timed_out(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Handle a learn timeout."""
+        return self.async_abort(reason="learn_timeout")
+
+    async def async_step_name(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Ask for a name for the newly learned command."""
+        if user_input is not None:
+            return self.async_create_entry(
+                data={CONF_CODE: self._learned_code}, title=user_input[CONF_NAME]
+            )
+
+        return self.async_show_form(
+            step_id="name",
+            data_schema=vol.Schema({vol.Required(CONF_NAME): str}),
+        )
+
+    async def async_step_reconfigure_name(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Confirm the name for a re-learned command."""
+        subentry = self._get_reconfigure_subentry()
+        if user_input is not None:
+            return self.async_update_and_abort(
+                self._get_entry(),
+                subentry,
+                data={CONF_CODE: self._learned_code},
+                title=user_input[CONF_NAME],
+            )
+
+        return self.async_show_form(
+            step_id="reconfigure_name",
+            data_schema=vol.Schema(
+                {vol.Required(CONF_NAME, default=subentry.title): str}
+            ),
         )
