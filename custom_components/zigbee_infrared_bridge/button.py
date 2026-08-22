@@ -32,6 +32,7 @@ async def async_setup_entry(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, entry.data[CONF_IEEE])},
         name=entry.title,
+
     )
 
     async_add_entities(buttons)
@@ -53,6 +54,7 @@ class IrCommandButton(ButtonEntity):
             identifiers={(DOMAIN, entry.data[CONF_IEEE])},
             name=entry.title,
         )
+        self.icon = "mdi:remote"
 
     @override
     async def async_added_to_hass(self) -> None:
