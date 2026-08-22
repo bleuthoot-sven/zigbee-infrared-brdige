@@ -72,8 +72,9 @@ class ZigbeeIrBlaster:
         """
         async with self._learn_lock:
             cluster = self._get_ir_control_cluster()
+            cluster.command(IR_LEARN_COMMAND_ID, on_off=True)
             baseline = await self._async_read_last_learned_code(cluster)
-            await cluster.command(IR_LEARN_COMMAND_ID, on_off=True)
+
             try:
                 async with asyncio.timeout(timeout):
                     while True:
@@ -86,9 +87,9 @@ class ZigbeeIrBlaster:
                     "Timed out waiting for an IR code to be learned"
                 ) from err
             finally:
-                await cluster.command(IR_LEARN_COMMAND_ID, on_off=False)
+                cluster.command(IR_LEARN_COMMAND_ID, on_off=False)
 
     async def async_send_code(self, code: str) -> None:
         """Send a previously learned IR code."""
         cluster = self._get_ir_control_cluster()
-        await cluster.command(IR_SEND_COMMAND_ID, code=code)
+        cluster.command(IR_SEND_COMMAND_ID, code=code)
