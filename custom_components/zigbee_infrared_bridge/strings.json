@@ -1,0 +1,49 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "device_id": "Device"
+        },
+        "data_description": {
+          "device_id": "The ZHA-paired Zigbee IR blaster to control"
+        }
+      }
+    },
+    "error": {
+      "not_ir_blaster": "This device does not support learning and sending infrared codes"
+    },
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+    }
+  },
+  "config_subentries": {
+    "command": {
+      "entry_type": "IR command",
+      "initiate_flow": {
+        "user": "Add command",
+        "reconfigure": "Re-learn command"
+      },
+      "step": {
+        "name": {
+          "data": {
+            "name": "[%key:common::config_flow::data::name%]"
+          },
+          "description": "Enter a name for the learned command."
+        },
+        "reconfigure_name": {
+          "data": {
+            "name": "[%key:common::config_flow::data::name%]"
+          },
+          "description": "Confirm the name for the re-learned command."
+        }
+      },
+      "progress": {
+        "learn": "Point the remote at the IR blaster and press the button you want to learn."
+      },
+      "abort": {
+        "learn_timeout": "Timed out waiting for an IR code to be learned"
+      }
+    }
+  }
+}

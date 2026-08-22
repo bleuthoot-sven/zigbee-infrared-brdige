@@ -1,0 +1,17 @@
+{
+  "domain": "zigbee_infrared_bridge",
+  "name": "Zigbee Infrared Bridge",
+  "codeowners": [
+    "@bleuthoot-sven"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "zha"
+  ],
+  "documentation": "https://github.com/bleuthoot-sven/zigbee_infrared_bridge",
+  "integration_type": "device",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/bleuthoot-sven/zigbee_infrared_bridge/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}
